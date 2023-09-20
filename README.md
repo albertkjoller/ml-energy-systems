@@ -11,6 +11,8 @@ conda activate 46765
 pip install -r requirements.txt
 ```
 
+Now, create a folder in the root of the repository named `data` and move all the pre-given material to this folder - then you are ready for running the data processing from `src/assignment1/notebooks/data_processing.ipynb` to get the general dataset.
+
 Assignments overview
 ------------
 ### __Assignment 1:__ Renewable energy trading in day-ahead and balancing markets
