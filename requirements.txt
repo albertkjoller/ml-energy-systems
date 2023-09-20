@@ -16,3 +16,5 @@ gurobipy
 notebook
 scipy
 scikit-learn
+pytz
+openpyxl
