@@ -1,19 +1,15 @@
-from typing import List
-
 import os
-
-import pytz
-import numpy as np
-import pandas as pd
-from pathlib import Path
-
-from dateutil.parser import parse
-
 import json
 import zipfile
+from pathlib import Path
+from typing import List
+
+import pytz
+from dateutil.parser import parse
+
+import pandas as pd
 from tqdm import tqdm
 tqdm.pandas()
-
 
 class DataProcessor:
 
@@ -192,11 +188,11 @@ class DataProcessor:
 if __name__ == '__main__':
     
     # Set path to data and save folder
-    DATA_DIR = Path('../../../data/assignment1')
-    SAVE_DIR = Path(r'../../../data/assignment1/processed')
+    DATA_DIR    = Path('../../../data/assignment1')
+    SAVE_DIR    = Path(r'../../../data/assignment1/processed')
     
     # Define dataset processor object
-    processor          = DataProcessor(DATA_DIR=DATA_DIR, SAVE_DIR=SAVE_DIR)
+    processor   = DataProcessor(DATA_DIR=DATA_DIR, SAVE_DIR=SAVE_DIR)
 
     # Load and combine data sources
     processor.combine_and_save_data_sources(weather_municipality='Roskilde', priceareas=['DK1', 'DK2'])
