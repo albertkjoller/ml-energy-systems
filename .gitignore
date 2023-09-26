@@ -89,3 +89,4 @@ target/
 .mypy_cache/
 
 hpc_access_token.txt
+*_albert.ipynb
