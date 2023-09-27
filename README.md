@@ -17,7 +17,7 @@ Assignments overview
 ------------
 ### __Assignment 1:__ Renewable energy trading in day-ahead and balancing markets
 
-This assignment deals with investigating the problem of trading renewable energy in day-ahed and balancing markets by comparing two strategies; 1) using predictions of the wind power production before adressing the decision-making problem and 2) directly determining the most effective offering strategy using data-driven methods. In the process, a deterministic optimization model is combined with linear and non-linear data-driven methods that are explored along with the effect of regularization.
+This assignment deals with investigating the problem of trading renewable energy in day-ahed and balancing markets by comparing two strategies; namely, 1) using predictions of the wind power production before adressing the decision-making problem and 2) directly determining the most effective offering strategy using data-driven methods. In the process, a deterministic optimization model is combined with linear and non-linear data-driven methods that are explored along with the effect of regularization.
 
 
 --------
