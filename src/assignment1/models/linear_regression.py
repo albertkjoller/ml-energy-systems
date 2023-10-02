@@ -2,6 +2,8 @@ from sklearn.base import BaseEstimator
 import numpy as np
 from tqdm import tqdm
 
+import pandas as pd
+
 class GradientBasedLinearRegression:
 
     def __init__(self):
@@ -12,11 +14,14 @@ class GradientBasedLinearRegression:
         
     def fit(self, X, y, alpha = 0.0001, n_iterations = 1000, tolerence_convergence = 1e-4):
         # Remove intercept
-        X = X.copy().drop(columns='Intercept')
+        columns_order   = np.sort(X.columns)
+        X               = X[columns_order]
+
         # Get num observations and num features
         self.n, self.m = X.shape
         # Create array of weights, one for each feature
-        self.weights = np.zeros(self.m)
+        self.weights            = np.zeros(self.m)
+        self.coefficient_names  = np.concatenate([['Intercept'], columns_order]) 
 
         # Iterate a number of times
         for _ in tqdm(range(n_iterations), desc="Training Linear Regression..."):
@@ -26,28 +31,27 @@ class GradientBasedLinearRegression:
 
             # Calculate error and loss
             error =  y_hat - y
-            mse = np.square(error).mean()
             
             # Log the loss
-            self.loss.append(mse)
+            self.loss.append(np.square(error).mean())
 
             # Calculate gradients using partial derivatives
-            gradient_wrt_weights = (1 / self.n) * np.dot(X.T, error)
-            gradient_wrt_bias = (1 / self.n) * np.sum(error)         
+            gradient_wrt_weights    = (1 / self.n) * np.dot(X.T, error)
+            gradient_wrt_bias       = (1 / self.n) * np.sum(error)         
                 
             # Update parameters using gradients and alpha    
-            self.weights = self.weights - alpha * gradient_wrt_weights
-            self.bias = self.bias - alpha * gradient_wrt_bias
-            
-            self.coefficients = np.concatenate([np.array([self.bias]), self.weights])
+            self.weights            = self.weights - alpha * gradient_wrt_weights
+            self.bias               = self.bias - alpha * gradient_wrt_bias
+            self.coefficients       = np.concatenate([np.array([self.bias]), self.weights])
+
             # Store weights for convergence analysis
             self.weight_history.append(self.coefficients)
             if np.linalg.norm(self.weights) < tolerence_convergence:
                 break
         
-    
     def predict(self, X):
-        X = X.copy().drop(columns='Intercept')
+        columns_order   = np.setdiff1d(X.columns, ['Intercept'])
+        X               = X[columns_order]        
         # Generate predictions using current weights and bias 
         return np.dot(X, self.weights) + self.bias 
 
@@ -56,8 +60,16 @@ class ClosedFormLinearRegression(BaseEstimator):
         self.coefficients   = None
         self.regularization = regularization
         self.lambda_        = lambda_           # regularization parameter
-
+        
+    def _add_intercept(self, X):
+        # Insert intercept as first column in dataframe
+        return pd.DataFrame(np.ones((X.shape[0], 1)), columns=['Intercept']).join(X)
+        
     def fit(self, X, y):
+        X                       = self._add_intercept(X)
+        self.coefficient_names  = np.sort(X.columns)
+        X                       = X[self.coefficient_names]
+
         if self.regularization.lower() == 'ridge':
             self.coefficients = np.linalg.solve(X.T.dot(X) + self.lambda_ * np.eye(X.shape[1]), X.T.dot(y))
         elif self.regularization.lower() == 'lasso':
@@ -66,6 +78,8 @@ class ClosedFormLinearRegression(BaseEstimator):
             self.coefficients = np.linalg.solve(X.T.dot(X), X.T.dot(y))
         
     def predict(self, X):
+        X = self._add_intercept(X)
+        X = X[self.coefficient_names]
         return X.dot(self.coefficients)
     
 class LocallyWeightedLinearRegression(BaseEstimator):
@@ -101,5 +115,3 @@ class LocallyWeightedLinearRegression(BaseEstimator):
 
     def predict(self, X):
         return X.dot(self.coefficients)
-
-    
