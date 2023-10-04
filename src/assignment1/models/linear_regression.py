@@ -82,36 +82,56 @@ class ClosedFormLinearRegression(BaseEstimator):
         X = X[self.coefficient_names]
         return X.dot(self.coefficients)
     
+
 class LocallyWeightedLinearRegression(BaseEstimator):
-    def __init__(self, sigma, regularization = '', lambda_=None):
+    def __init__(self, sigma, regularization = '', kernel: str = 'Gaussian', lambda_=0.0):
         self.coefficients   = None
         self.sigma          = sigma
         self.regularization = regularization
         self.lambda_        = lambda_           # regularization parameter
-
-    def gaussian_kernel(self, x, X, sigma, kappa: float = 1.):
+        self.kernel_        = self.get_kernel(kernel)
+    
+    def get_kernel(self, kernel):
+        if kernel == 'Gaussian':
+            return self.gaussian_kernel
+        else:
+            raise NotImplementedError(f'Kernel {self.kernel_} not implemented')
+        
+    def gaussian_kernel(self, dists, kappa: float = 1.):
         """
         Compute the Gaussian kernel
         """
-        return kappa * np.exp(-np.linalg.norm(x - X, ord=2, axis=1)**2 / (2 * sigma**2)) 
+        return kappa * np.exp(-dists**2 / (2 * self.sigma**2)) 
 
-    def compute_weight_matrix(self, X):
-        # TODO: consider speeding this up using vectorization or something
-        N      = len(X)
-        self.W = np.zeros((N, N))
-        for i in tqdm(range(N), desc="Computing weight matrix"):
-            self.W[i, :] = self.gaussian_kernel(X.iloc[i], X, sigma=self.sigma, kappa=1.)
-
-        assert np.all(self.W == self.W.T), "The matrix is not symmetric - something is wrong"
-
+    def _add_intercept(self, X):
+        # Insert intercept as first column in dataframe
+        return pd.DataFrame(np.ones((X.shape[0], 1)), columns=['Intercept']).join(X)
+        
     def fit(self, X, y):
-        self.compute_weight_matrix(X)
-        if self.regularization.lower() == 'ridge':
-            self.coefficients = np.linalg.solve(X.T.dot(self.W).dot(X) + self.lambda_ * np.eye(X.shape[1]), X.T.dot(y))
-        elif self.regularization.lower() == 'lasso':
-            raise NotImplementedError("Lasso not implemented yet")
-        else:
-            self.coefficients = np.linalg.solve(X.T.dot(self.W).dot(X), X.T.dot(self.W).dot(y))
+        X                       = self._add_intercept(X)
+        self.coefficient_names  = np.sort(X.columns)
+        X                       = X[self.coefficient_names].to_numpy()
+        
+        # Fit non-parametric model
+        self.Xtrain_ = X
+        self.ytrain_ = y
 
     def predict(self, X):
-        return X.dot(self.coefficients)
+        # Add intercept
+        X = self._add_intercept(X)
+        X = X[self.coefficient_names].to_numpy()
+
+        # Compute kernels
+        print("Computing distances...")
+        dists   = np.linalg.norm((X[:, np.newaxis, :] - self.Xtrain_), axis=-1)
+        print("Computing kernels...")
+        Ks      = self.kernel_(dists)
+        
+        # Initialize weights
+        thetas  = np.zeros(X.shape)
+        for i, k in enumerate(Ks):
+            # Solve for theta locally
+            thetas[i, :]    = np.linalg.solve(self.Xtrain_.T.dot(np.diag(k)).dot(self.Xtrain_) + self.lambda_ * np.eye(X.shape[1]), self.Xtrain_.T.dot(np.diag(k)).dot(self.ytrain_))
+
+        # Predict for each point
+        return (X * thetas).sum(axis=1)
