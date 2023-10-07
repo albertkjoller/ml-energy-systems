@@ -298,7 +298,6 @@ class CrossValidation:
             ypred = model.predict(Xtest)
 
             # Compute and store metrics
-            r2_score(ytest, yhat_test)
             self.store_results(f'Generalization error', ytest, ypred, mode='outer')
             self.predictions[param_name][fold] = (ytest, ypred) if self.store_ytest else ypred
 
