@@ -14,6 +14,7 @@ from datetime import timedelta
 import matplotlib.pyplot as plt
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.cluster import KMeans
 
 # feature selection
 def select_features(Xtrain_, ytrain_, Xtest_, n_features):
@@ -177,6 +178,27 @@ class CrossValidation:
 
         return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'N_features' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
     
+    def l1_regularization(self, lambdas, X_, y_, timestamps_, outer_fold, seed=0):
+        for j, lambda_ in enumerate(lambdas):
+            np.random.seed(seed)
+
+            for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(lambdas)}) INNER CV for lambda == {lambda_}...'):
+                # Get split for current CV fold
+                Xtrain_, ytrain_, Xtest_, ytest_, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+
+                # Normalize continuous attributes
+                Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
+
+                # Fit model and get predictions
+                model = self.base_model(regularization='lasso', lambda_=lambda_)
+                model.fit(Xtrain_, ytrain_)
+                ypred_ = model.predict(Xtest_)
+                
+                # Compute and store metrics
+                self.store_results(f'Lambda={lambda_}', ytest_, ypred_, mode='inner')
+
+        return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'Lambda' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
+
     def l2_regularization(self, lambdas, X_, y_, timestamps_, outer_fold, seed=0):
         # Loop through various fractions
         for j, lambda_ in enumerate(lambdas):
@@ -224,6 +246,49 @@ class CrossValidation:
     def kernel_type(self, kernels, seed=0):
         pass
 
+    def kmeans_clusters(self, X_, y_, timestamps_, Ks, outer_fold, seed=0):
+        # Loop through various fractions
+        for j, K in enumerate(Ks):
+            np.random.seed(seed)
+        
+            for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(Ks)}) INNER CV for K clusters == {K:.3f}...'):
+                # Get split for current CV fold
+                Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+
+                # Normalize continuous attributes
+                Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
+
+                # Run Kmeans clustering on training set
+                cls = KMeans(n_clusters=K, random_state=0, n_init='auto')
+                cls.fit(Xtrain_)
+                
+                # Predict clusters for train and test set
+                assert cls.labels_.__len__() == Xtrain_.shape[0]
+                Xtrain_['cluster']  = cls.labels_
+                Xtest_['cluster']   = cls.predict(Xtest_)
+                        
+                preds = pd.DataFrame([])
+                for label_ in np.unique(cls.labels_):
+                    Xtrain_c = Xtrain_[Xtrain_['cluster'] == label_].reset_index(drop=True).drop(columns='cluster')
+                    ytrain_c = ytrain_[Xtrain_['cluster'] == label_].reset_index(drop=True)
+                    
+                    # Fit local cluster model               
+                    model = ClosedFormLinearRegression(regularization='ridge', lambda_=self.lambda_)
+                    model.fit(Xtrain_c, ytrain_c)
+
+                    # Get predictions  
+                    Xtest_c         = Xtest_[Xtest_['cluster'] == label_]
+                    preds_c         = pd.DataFrame([model.predict(Xtest_c.reset_index(drop=True))]).T
+                    preds_c.index   = Xtest_c.index
+                    preds           = pd.concat([preds, preds_c])
+
+                # Compute and store metrics
+                ypred_ = preds.reset_index().sort_values(by='index')[0].to_numpy()
+                self.store_results(f'K={K}', ytest_, ypred_, mode='inner')
+        
+        return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'K' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
+
+
     def run(self, inner_loop='dataset_size', seed=0, **kwargs):
         np.random.seed(seed)
 
@@ -257,14 +322,20 @@ class CrossValidation:
             elif inner_loop == 'feature_selection':
                 param_name = 'feature_selection'
                 _, _, RMSE, _ = self.results_outer['feature_selection'][fold] = self.feature_selection(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, n_features_list=kwargs['n_features_list'])
+            elif inner_loop == 'l1_regularization':
+                param_name = 'l1_regularization'
+                _, _, RMSE, _ = self.results_outer['lambdas_l1'][fold] = self.l1_regularization(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, lambdas=kwargs['lambdas'])
             elif inner_loop == 'l2_regularization':
                 param_name = 'l2_regularization'
-                _, _, RMSE, _ = self.results_outer['lambdas'][fold] = self.l2_regularization(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, lambdas=kwargs['lambdas'])
+                _, _, RMSE, _ = self.results_outer['lambdas_l2'][fold] = self.l2_regularization(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, lambdas=kwargs['lambdas'])
             elif inner_loop == 'lengthscale_locally_weighted':
                 param_name = 'lengthscale_locally_weighted'
                 _, _, RMSE, _ = self.results_outer['lengthscale_locally_weighted'][fold] = self.lengthscale_locally_weighted(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, lengthscales=kwargs['lengthscales'])
             elif inner_loop == 'kernel_type':
                 self.results_outer[fold] = self.kernel_type(**kwargs)
+            elif inner_loop == 'kmeans':
+                param_name = 'kmeans'
+                _, _, RMSE, _ = self.results_outer['kmeans'][fold] = self.kmeans_clusters(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, Ks=kwargs['Ks'])
             else:
                 raise ValueError(f'Invalid inner loop: {inner_loop}')
 
@@ -290,12 +361,43 @@ class CrossValidation:
             if inner_loop == 'lengthscale_locally_weighted':
                 best_lengthscale            = float(RMSE.index[RMSE.argmin()].split("=")[-1])
                 model                       = self.base_model(sigma=best_lengthscale, kernel='Gaussian')
+            elif inner_loop == 'kmeans':
+                best_K                      = int(RMSE.index[RMSE.argmin()].split("=")[-1])
             else:
-                model = self.base_model(regularization='ridge', lambda_=self.best_lambda_)
+                model = self.base_model(regularization='ridge' if inner_loop != 'l1_regularization' else 'lasso', lambda_=self.best_lambda_)
 
-            # Fit model and get predictions
-            model.fit(Xtrain, ytrain)
-            ypred = model.predict(Xtest)
+            if inner_loop == 'kmeans':
+                # Run Kmeans clustering on training set
+                cls = KMeans(n_clusters=best_K, random_state=0, n_init='auto')
+                cls.fit(Xtrain)
+                
+                # Predict clusters for train and test set
+                assert cls.labels_.__len__() == Xtrain.shape[0]
+                Xtrain_, Xtest_ = Xtrain.copy(), Xtest.copy()
+                Xtrain_['cluster']  = cls.labels_
+                Xtest_['cluster']   = cls.predict(Xtest_)
+                        
+                preds = pd.DataFrame([])
+                for label_ in np.unique(Xtest_['cluster']):
+                    Xtrain_c = Xtrain_[Xtrain_['cluster'] == label_].reset_index(drop=True).drop(columns='cluster')
+                    ytrain_c = ytrain[Xtrain_['cluster'] == label_].reset_index(drop=True)
+                    
+                    # Fit local cluster model               
+                    model = ClosedFormLinearRegression(regularization='ridge', lambda_=self.lambda_)
+                    model.fit(Xtrain_c, ytrain_c)
+
+                    # Get predictions  
+                    Xtest_c         = Xtest_[Xtest_['cluster'] == label_]
+                    preds_c         = pd.DataFrame([model.predict(Xtest_c.reset_index(drop=True))]).T
+                    preds_c.index   = Xtest_c.index
+                    preds           = pd.concat([preds, preds_c])
+
+                ypred = preds.reset_index().sort_values(by='index')[0].to_numpy()
+                
+            else:
+                # Fit model and get predictions
+                model.fit(Xtrain, ytrain)
+                ypred = model.predict(Xtest)
 
             # Compute and store metrics
             self.store_results(f'Generalization error', ytest, ypred, mode='outer')
