@@ -19,6 +19,7 @@ Assignments overview
 
 This assignment deals with investigating the problem of trading renewable energy in day-ahed and balancing markets by comparing two strategies; namely, 1) using predictions of the wind power production before adressing the decision-making problem and 2) directly determining the most effective offering strategy using data-driven methods. In the process, a deterministic optimization model is combined with linear and non-linear data-driven methods that are explored along with the effect of regularization.
 
+All the relevant code is contained in the `src.assignment1` folder while the results from the associated report can be obtained by running `src.assignment1.notebooks.explainer_notebook.ipynb`. We remark that this takes a while due to 2-layer cross-validation, however, the implementations without cross-validation are fast to run.
 
 --------
 
