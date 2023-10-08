@@ -178,6 +178,34 @@ class CrossValidation:
 
         return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'N_features' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
     
+    def polynomial_design_matrix(self, orders, X_, y_, timestamps_, outer_fold, seed=0):
+        for j, order_ in enumerate(orders):
+            np.random.seed(seed)
+
+            for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(orders)}) INNER CV for polynomial order == {order_}...'):
+                # Get split for current CV fold
+                Xtrain_, ytrain_, Xtest_, ytest_, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+
+                # Normalize continuous attributes
+                Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
+
+                if order_ > 1:
+                    for cur_order in range(1, order_):
+                        cur_order   += 1
+                        col_map     = {attr_: f"{attr_}_order{cur_order}" for attr_ in self.cont_attr}
+                        Xtrain_     = pd.concat([Xtrain_, np.power(Xtrain_[self.cont_attr], cur_order).rename(columns=col_map)], axis=1)
+                        Xtest_      = pd.concat([Xtest_, np.power(Xtest_[self.cont_attr], cur_order).rename(columns=col_map)], axis=1)
+                
+                # Fit model and get predictions
+                model = self.base_model(regularization='ridge', lambda_=self.best_lambda_)
+                model.fit(Xtrain_, ytrain_)
+                ypred_ = model.predict(Xtest_)
+                
+                # Compute and store metrics
+                self.store_results(f'Order={order_}', ytest_, ypred_, mode='inner')
+
+        return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'Order' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
+
     def l1_regularization(self, lambdas, X_, y_, timestamps_, outer_fold, seed=0):
         for j, lambda_ in enumerate(lambdas):
             np.random.seed(seed)
@@ -190,14 +218,14 @@ class CrossValidation:
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
 
                 # Fit model and get predictions
-                model = self.base_model(regularization='lasso', lambda_=lambda_)
+                model = Lasso(alpha=lambda_) # self.base_model(regularization='lasso', lambda_=lambda_)
                 model.fit(Xtrain_, ytrain_)
                 ypred_ = model.predict(Xtest_)
                 
                 # Compute and store metrics
-                self.store_results(f'Lambda={lambda_}', ytest_, ypred_, mode='inner')
+                self.store_results(f'Lambda(L1)={lambda_}', ytest_, ypred_, mode='inner')
 
-        return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'Lambda' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
+        return [pd.DataFrame.from_dict({name_: res_ for (name_, res_) in self.results_inner[score_].items() if 'Lambda(L1)' in name_}) for score_ in ['MAE', 'MSE', 'RMSE', 'R2']]
 
     def l2_regularization(self, lambdas, X_, y_, timestamps_, outer_fold, seed=0):
         # Loop through various fractions
@@ -273,7 +301,7 @@ class CrossValidation:
                     ytrain_c = ytrain_[Xtrain_['cluster'] == label_].reset_index(drop=True)
                     
                     # Fit local cluster model               
-                    model = ClosedFormLinearRegression(regularization='ridge', lambda_=self.lambda_)
+                    model = self.base_model(regularization='ridge', lambda_=self.lambda_)
                     model.fit(Xtrain_c, ytrain_c)
 
                     # Get predictions  
@@ -322,6 +350,9 @@ class CrossValidation:
             elif inner_loop == 'feature_selection':
                 param_name = 'feature_selection'
                 _, _, RMSE, _ = self.results_outer['feature_selection'][fold] = self.feature_selection(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, n_features_list=kwargs['n_features_list'])
+            elif inner_loop == 'polynomial_design_matrix':
+                param_name = 'polynomial_design_matrix'
+                _, _, RMSE, _ = self.results_outer['polynomial_design_matrix'][fold] = self.polynomial_design_matrix(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, orders=kwargs['orders'])
             elif inner_loop == 'l1_regularization':
                 param_name = 'l1_regularization'
                 _, _, RMSE, _ = self.results_outer['lambdas_l1'][fold] = self.l1_regularization(X_=Xtrain.copy(), y_=ytrain.copy(), timestamps_=timestamps_, outer_fold=fold, lambdas=kwargs['lambdas'])
@@ -344,27 +375,42 @@ class CrossValidation:
                 best_frac                   = float(RMSE.index[RMSE.argmin()].split("=")[-1])        
                 temp_                       = pd.concat([Xtrain, ytrain], axis=1).sample(frac=best_frac)
                 Xtrain, ytrain              = temp_.iloc[:, :-1].reset_index(drop=True), temp_.iloc[:, -1].reset_index(drop=True)
-
-            if inner_loop == 'feature_selection':
+            
+            elif inner_loop == 'feature_selection':
                 best_param                  = int(RMSE.index[RMSE.argmin()].split("=")[-1])
                 _, _, fs                    = select_features(Xtrain, ytrain, Xtest, n_features=best_param)
                 current_features            = Xtrain.columns[fs.get_support()]
                 Xtrain, Xtest               = Xtrain[current_features], Xtest[current_features]
                 self.best_cont_attr_        = np.intersect1d(list(current_features), self.cont_attr)
-            if inner_loop == 'l2_regularization':
+            
+            elif inner_loop == 'kmeans':
+                best_K                      = int(RMSE.index[RMSE.argmin()].split("=")[-1])
+            
+            elif inner_loop == 'l2_regularization':
                 self.best_lambda_           = float(RMSE.index[RMSE.argmin()].split("=")[-1])
+            
+            if inner_loop == 'l1_regularization':
+                self.best_lambda_           = float(RMSE.index[RMSE.argmin()].split("=")[-1])
+                model                       = Lasso(alpha=self.best_lambda_)
+            
+            elif inner_loop == 'lengthscale_locally_weighted':
+                best_lengthscale            = float(RMSE.index[RMSE.argmin()].split("=")[-1])
+                model                       = self.base_model(sigma=best_lengthscale, kernel='Gaussian')
+            
+            else:
+                model = self.base_model(regularization='ridge', lambda_=self.best_lambda_)
 
             # Normalize continuous attributes
             Xtrain, Xtest   = min_max_normalization(Xtrain, Xtest, self.best_cont_attr_, a=self.a, b=self.b)
-
-            # Define model
-            if inner_loop == 'lengthscale_locally_weighted':
-                best_lengthscale            = float(RMSE.index[RMSE.argmin()].split("=")[-1])
-                model                       = self.base_model(sigma=best_lengthscale, kernel='Gaussian')
-            elif inner_loop == 'kmeans':
-                best_K                      = int(RMSE.index[RMSE.argmin()].split("=")[-1])
-            else:
-                model = self.base_model(regularization='ridge' if inner_loop != 'l1_regularization' else 'lasso', lambda_=self.best_lambda_)
+            
+            if inner_loop == 'polynomial_design_matrix':
+                best_order                  = int(RMSE.index[RMSE.argmin()].split("=")[-1])
+                if best_order > 1:
+                    for cur_order in range(1, best_order):
+                        cur_order   += 1
+                        col_map     = {attr_: f"{attr_}_order{cur_order}" for attr_ in self.cont_attr}
+                        Xtrain      = pd.concat([Xtrain, np.power(Xtrain[self.cont_attr], cur_order).rename(columns=col_map)], axis=1)
+                        Xtest       = pd.concat([Xtest, np.power(Xtest[self.cont_attr], cur_order).rename(columns=col_map)], axis=1)
 
             if inner_loop == 'kmeans':
                 # Run Kmeans clustering on training set
