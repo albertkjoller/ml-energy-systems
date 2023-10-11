@@ -6,11 +6,13 @@ import pandas as pd
 
 class GradientBasedLinearRegression:
 
-    def __init__(self):
+    def __init__(self, regularization = '', lambda_=None):
         # Initialize parameters
         self.bias = 0
         self.loss = []
         self.weight_history = []
+        self.regularization = regularization
+        self.lambda_        = lambda_           # regularization parameter
         
     def fit(self, X, y, alpha = 0.0001, n_iterations = 1000, tolerence_convergence = 1e-4):
         # Remove intercept
@@ -20,8 +22,8 @@ class GradientBasedLinearRegression:
         # Get num observations and num features
         self.n, self.m = X.shape
         # Create array of weights, one for each feature
-        self.weights            = np.zeros(self.m)
-        self.coefficient_names  = np.concatenate([['Intercept'], columns_order]) 
+        self.weights              = np.zeros(self.m)
+        self.coefficient_names    = np.concatenate([['Intercept'], columns_order]) 
 
         # Iterate a number of times
         for _ in tqdm(range(n_iterations), desc="Training Linear Regression..."):
@@ -35,10 +37,24 @@ class GradientBasedLinearRegression:
             # Log the loss
             self.loss.append(np.square(error).mean())
 
-            # Calculate gradients using partial derivatives
-            gradient_wrt_weights    = (1 / self.n) * np.dot(X.T, error)
-            gradient_wrt_bias       = (1 / self.n) * np.sum(error)         
-                
+            if self.regularization.lower() == 'ridge':
+                raise NotImplementedError("Not implemented yet!")
+            elif self.regularization.lower() == 'lasso':
+                gradient_wrt_weights    = np.dot(X.T, error)
+                gradient_wrt_bias       = (1/ self.n) * np.sum(error) 
+
+                for k in range (self.m):
+                    if (self.weights[k] > 0):
+                        gradient_wrt_weights[k] = (gradient_wrt_weights[k] + self.lambda_/2)/self.n
+                    else:
+                        gradient_wrt_weights[k] = (gradient_wrt_weights[k] - self.lambda_/2)/self.n
+ 
+            else:
+                # Calculate gradients using partial derivatives
+                gradient_wrt_weights    = (1 / self.n) * np.dot(X.T, error)
+                gradient_wrt_bias       = (1 / self.n) * np.sum(error)    
+
+   
             # Update parameters using gradients and alpha    
             self.weights            = self.weights - alpha * gradient_wrt_weights
             self.bias               = self.bias - alpha * gradient_wrt_bias
@@ -74,7 +90,7 @@ class ClosedFormLinearRegression(BaseEstimator):
         if self.regularization.lower() == 'ridge':
             self.coefficients = np.linalg.solve(X.T.dot(X) + self.lambda_ * np.eye(X.shape[1]), X.T.dot(y))
         elif self.regularization.lower() == 'lasso':
-            raise NotImplementedError("Lasso not implemented yet")
+            raise NotImplementedError("There is no Closed Form solution for Lasso regularization!")
         else:
             self.coefficients = np.linalg.solve(X.T.dot(X), X.T.dot(y))
         
