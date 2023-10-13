@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.cluster import KMeans
+from sklearn.linear_model import Lasso
 
 # feature selection
 def select_features(Xtrain_, ytrain_, Xtest_, n_features):
@@ -47,6 +48,7 @@ def get_train_test_split(X, y, timestamps, split_type: str = 'fraction', test_si
         Xtrain, Xtest                       = X[:int(N * ( 1- test_size ))].reset_index(drop=True), X[int(N * ( 1- test_size )):].reset_index(drop=True)
         ytrain, ytest                       = y[:int(N * ( 1- test_size ))].reset_index(drop=True), y[int(N * ( 1- test_size )):].reset_index(drop=True)
         timestamps_train                    = timestamps[:int(N * ( 1- test_size))]
+        timestamps_test                     = timestamps[int(N * ( 1- test_size )):]
 
     elif split_type == 'inner_fold':
         assert fold is not None, 'fold must be specified'
@@ -56,6 +58,7 @@ def get_train_test_split(X, y, timestamps, split_type: str = 'fraction', test_si
         Xtrain, Xtest                       = X[:test_idxs[test_idxs != False].index[0]], X[test_idxs]
         ytrain, ytest                       = y[:test_idxs[test_idxs != False].index[0]], y[test_idxs]
         timestamps_train                    = timestamps[:test_idxs[test_idxs != False].index[0]]
+        timestamps_test                     = timestamps[test_idxs]
     
     elif split_type == 'outer_fold':
         assert fold is not None, 'fold must be specified'
@@ -65,8 +68,9 @@ def get_train_test_split(X, y, timestamps, split_type: str = 'fraction', test_si
         Xtrain, Xtest                       = X[:test_idxs[test_idxs != 0].index[0]], X[test_idxs]
         ytrain, ytest                       = y[:test_idxs[test_idxs != 0].index[0]], y[test_idxs]
         timestamps_train                    = timestamps[:test_idxs[test_idxs != 0].index[0]]
+        timestamps_test                     = timestamps[test_idxs]
 
-    return Xtrain.reset_index(drop=True), ytrain.reset_index(drop=True), Xtest.reset_index(drop=True), ytest.reset_index(drop=True), timestamps_train.reset_index(drop=True)
+    return Xtrain.reset_index(drop=True), ytrain.reset_index(drop=True), Xtest.reset_index(drop=True), ytest.reset_index(drop=True), timestamps_train.reset_index(drop=True), timestamps_test.reset_index(drop=True)
 
 class CrossValidation:
 
@@ -85,6 +89,7 @@ class CrossValidation:
         self.results_inner      = defaultdict(lambda: defaultdict(list))
         self.results_outer      = defaultdict(lambda: defaultdict(list))
         self.predictions        = defaultdict(lambda: defaultdict(dict))
+        self.true_vals          = defaultdict(lambda: defaultdict(dict))
         self.results_latex      = pd.DataFrame([])
         self.store_ytest        = store_ytest
 
@@ -109,7 +114,7 @@ class CrossValidation:
 
         for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)}) INNER CV for no hyperparameter...'):
             # Get split for current CV fold
-            Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+            Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
             # Normalize continuous attributes
             Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -131,7 +136,7 @@ class CrossValidation:
 
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(fractions)}) INNER CV for fraction == {frac}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Subsample training set
                 temp_               = pd.concat([Xtrain_, ytrain_], axis=1).sample(frac=frac).reset_index(drop=True)
@@ -157,7 +162,7 @@ class CrossValidation:
 
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(n_features_list)}) Running CV for n_features == {n_features}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Run feature selection algorithm
                 _, _, fs                    = select_features(Xtrain_, ytrain_, Xtest_, n_features=n_features)
@@ -184,7 +189,7 @@ class CrossValidation:
 
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(orders)}) INNER CV for polynomial order == {order_}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Normalize continuous attributes
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -212,7 +217,7 @@ class CrossValidation:
 
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(lambdas)}) INNER CV for lambda == {lambda_}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Normalize continuous attributes
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -234,7 +239,7 @@ class CrossValidation:
 
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(lambdas)}) INNER CV for lambda == {lambda_}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _  = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Normalize continuous attributes
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -256,7 +261,7 @@ class CrossValidation:
         
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(lengthscales)}) INNER CV for sigma == {sigma:.3f}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Normalize continuous attributes
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -281,7 +286,7 @@ class CrossValidation:
         
             for fold in tqdm(self.CV_range_inner, desc=f'OUTER FOLD {outer_fold}/{max(self.CV_range_outer)} - {j+1}/{len(Ks)}) INNER CV for K clusters == {K:.3f}...'):
                 # Get split for current CV fold
-                Xtrain_, ytrain_, Xtest_, ytest_, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
+                Xtrain_, ytrain_, Xtest_, ytest_, _, _ = get_train_test_split(X_, y_, timestamps_, split_type='inner_fold', fold=fold)
 
                 # Normalize continuous attributes
                 Xtrain_, Xtest_   = min_max_normalization(Xtrain_, Xtest_, self.cont_attr, a=self.a, b=self.b)
@@ -328,7 +333,7 @@ class CrossValidation:
         for fold in self.CV_range_outer:
 
             # Get split for current CV fold
-            Xtrain, ytrain, Xtest, ytest, timestamps_   = get_train_test_split(self.X, self.y, self.timestamps, split_type='outer_fold', fold=fold)
+            Xtrain, ytrain, Xtest, ytest, timestamps_, test_timestamps_ = get_train_test_split(self.X, self.y, self.timestamps, split_type='outer_fold', fold=fold)
             if self.use_num_features is not None:
                 _, _, fs                                = select_features(Xtrain, ytrain, Xtest, n_features=self.use_num_features)
                 current_features                        = Xtrain.columns[fs.get_support()]
@@ -447,7 +452,11 @@ class CrossValidation:
 
             # Compute and store metrics
             self.store_results(f'Generalization error', ytest, ypred, mode='outer')
-            self.predictions[param_name][fold] = (ytest, ypred) if self.store_ytest else ypred
+            self.predictions[param_name][fold] = ypred
+
+            if self.store_ytest:
+                self.true_vals['actual_production'][fold] = ytest
+                self.true_vals['timestamps'][fold] = test_timestamps_
 
         print(f"\nTraining set sizes: {np.sort(train_set_sizes)}")
         print(f"Features used:")
