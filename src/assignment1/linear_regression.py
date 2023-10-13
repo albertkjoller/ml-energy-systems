@@ -144,6 +144,7 @@ class LocallyWeightedLinearRegression(BaseEstimator):
         
         # Initialize weights
         thetas  = np.zeros(X.shape)
+        
         for i, k in enumerate(Ks):
             # Solve for theta locally
             thetas[i, :]    = np.linalg.solve(self.Xtrain_.T.dot(np.diag(k)).dot(self.Xtrain_) + self.lambda_ * np.eye(X.shape[1]), self.Xtrain_.T.dot(np.diag(k)).dot(self.ytrain_))
