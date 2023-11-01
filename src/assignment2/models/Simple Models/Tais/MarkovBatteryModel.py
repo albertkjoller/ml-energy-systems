@@ -1,12 +1,4 @@
-#%% importing modules
-import numpy as np
-import pandas as pd
-#%% Importing price-data
-prices = pd.read_csv("/Users/tais/Downloads/ml-energy-systems/src/assignment2/data/day_ahead_prices.csv")
-#%% Cleaning price-data
-prices = prices[prices['PriceArea'] == 'DK1'][['StartTimeUTC','SpotPriceEUR']]
-prices['StartTimeUTC'] = pd.to_datetime(prices['StartTimeUTC'])
-prices = prices.set_index('StartTimeUTC')['SpotPriceEUR']
+
 #%% Declaring Markov Model Class
 
 class MarkovBatteryModel:
@@ -50,23 +42,6 @@ class ActionSpace:
     def __init__(self, action_names, battery_effects):
         self.actions = pd.DataFrame({'Action':action_names,'Effect':battery_effects}).set_index('Action')
 #%% Building State Space and Action Space
-values = dict.fromkeys(['SOC','Price'])
-values['SOC'] = ['LOW','HIGH']
-values['Price'] = ['LOW','HIGH']
-s_s = StateSpace(values)
 
-
-a_n = ["C","D","W"]
-b_e = [100,-100,0]
-a_s = ActionSpace(a_n,b_e)
-#%% Declaring Markov Model
-m_m = MarkovBatteryModel(a_s,s_s)
-# %% Building action tree
-a_d = {'C':'State 1',
-       'D':'State 2',
-       'W':['State 3','State 4']}
-
-m_m.buildActionTree(a_d)
-print(m_m.action_tree)
 # %%
 
