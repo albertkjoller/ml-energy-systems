@@ -21,6 +21,12 @@ This assignment deals with investigating the problem of trading renewable energy
 
 All the relevant code is contained in the `src.assignment1` folder while the results from the associated report can be obtained by running `src.assignment1.notebooks.explainer_notebook.ipynb`. We remark that this takes a while due to 2-layer cross-validation, however, the implementations without cross-validation are fast to run.
 
+### __Assignment 2:__ Real-time control of a battery
+
+This assignment deals with investigating the problem of controlling a battery by learning a policy based on day-ahead prices.
+
+All the relevant code is contained in the `src.assignment2` folder while the results from the associated report can be obtained by running `src.assignment2.notebooks.explainer_notebook.ipynb`.
+
 --------
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
