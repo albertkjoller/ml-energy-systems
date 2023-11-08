@@ -5,7 +5,7 @@ class Battery(object):
     class for simulating battery.
     """
 
-    def __init__(self, reward, random_rate, id='battery', capacity=500,
+    def __init__(self, reward, id='battery', capacity=500,
                  timeStep=6,
                  minimum_charge=0):
         # self.id = id + '_' + str(Battery.idCounter)
@@ -18,12 +18,12 @@ class Battery(object):
         self.action = [0]
         self.current = [0]
 
-        self.num_rows = 2 # charged high, charged low
+        self.num_rows = 3 # charged 0, charged 100, charged 200
         self.num_cols = 2 # price high, price low
-        self.num_states = self.num_rows * self.num_cols # 4 states {(Charged high, Price high), (Charged high, Price low), 
-                                            # (Charged low, Price high), (Charged low, Price low)}
+        self.num_states = self.num_rows * self.num_cols # 6 states {(Charged 0, Price high), (Charged 0, Price low), 
+                                            # (Charged 100, Price high), (Charged 100, Price low)}
+                                             # (Charged 200, Price high), (Charged 200, Price low)}
         self.num_actions = 3 # charging, discharging, idle
-        self.random_rate = random_rate
         self.reward = reward
         self.transition_model = self.get_transition_model()
 
@@ -40,38 +40,63 @@ class Battery(object):
 
     def get_reward_function(self):
         # reward of each state
+        high_price = 200
+        low_price = 20
+        self.reward = np.array([[-low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -low_price*100, -high_price * 100],
+                                [+low_price*100, +high_price * 100, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100],
+                               [0, 0, 0, 0, 0, 0]])
         return self.reward
 
     def get_transition_model(self):
-        
-        transition_model = np.zeros((self.num_states, self.num_actions, self.num_states))
-        for r in range(self.num_rows):
-            for c in range(self.num_cols):
-                # {0 - (Charged high, Price high), 1 - (Charged high, Price low), 
-                #  2 - (Charged low, Price high), 3 - (Charged low, Price low)}
-                s = self.get_state_from_pos((r, c))
-                for a in range(self.num_actions):
-                    # for each state define the probability of reaching a new state applying action a
-                    # when charging
-                    if a == 0:
-                        # (charged low, price high) -> {(charged high, price high), (charged high, price low)}
-                        # (charged low, price low) ->  {(charged high, price high), (charged high, price low)}
-                    # when discharging    
-                    elif a == 1:
-                        # (charged high, price high) -> {(charged low, price high), (charged low, price low)}
-                        # (charged high, price low) -> {(charged low, price high), (charged low, price low)}
-                    #when idle
-                    elif a == 2:
-                         # (charged high, price high) -> {(charged high, price high), (charged high, price low)}
-                         # (charged high, price low) -> {(charged high, price high), (charged high, price low)}
-                         # (charged low, price high) -> {(charged low, price high), (charged low, price low)}
-                         # (charged low, price low) -> {(charged low, price high), (charged low, price low)}
-                         
-                    transition_model[s, a, 0] += 1 - self.random_rate
-                    transition_model[s, a, 1] += self.random_rate / 2.0
-                    transition_model[s, a, 2] += self.random_rate / 2.0
-                    transition_model[s, a, 3] += self.random_rate / 2.0
-
+        # state can be any value from 0 to 5
+        # action any value from 0 to 2
+        transition_model = np.zeros((self.num_states,self.num_actions, self.num_states))
+        # probability matrix 6 X 6
+        probability_matrix = np.array([[0.80, 0.20, 0.80, 0.20, 0.00, 0.00], # 0, low
+                                     [0.85, 0.15, 0.85, 0.15, 0.00, 0.00], # 0, high
+                                     [0.80, 0.20, 0.80, 0.20, 0.80, 0.20], #100, low
+                                     [0.85, 0.15, 0.85, 0.15, 0.85, 0.15], #100 high
+                                     [0.00, 0.00, 0.80, 0.20, 0.80, 0.20], #200 low
+                                     [0.00, 0.00, 0.85, 0.15, 0.85, 0.15]]) #200 high
+        for s in range(self.num_states):
+            # {0 - (Charged 0, Price high), 1 - (Charged 0, Price low), 
+            #  2 - (Charged 100, Price high), 3 - (Charged 100, Price low),
+            #  4 - (Charged 200, Price high), 5 - (Charged 200, Price low)}
+            for a in range(self.num_actions):
+                # for each state define the probability of reaching a new state applying action a
+                # when charging and state is not maxim
+                if a == 0 and s < self.num_states - 2:
+                    # state -> state + 2, state + 3/state +1
+                    # (charged, price low) -> {(charged +100, price low), (charged +100, price high)}
+                    if (s % 2 == 0):
+                        transition_model[s, a, s+2] = probability_matrix[s, s+2]
+                        transition_model[s, a, s+3] = probability_matrix[s, s+3]
+                    else:
+                        # (charged, price high) -> {(charged +100, price low), (charged +100, price high)}
+                        transition_model[s, a, s+1] = probability_matrix[s, s+1]
+                        transition_model[s, a, s+2] = probability_matrix[s, s+2]
+                # when discharging    
+                elif a == 1 and s > 1:
+                    # state -> state -2, state-1/state-2
+                    # (charged, price low) -> {(charged - 100, price low), (charged - 100, price high)}
+                    if (s % 2 == 0):
+                        transition_model[s, a, s-1] = probability_matrix[s, s-1]
+                        transition_model[s, a, s-2] = probability_matrix[s, s-2]
+                    else:
+                        # (charged, price high) -> {(charged +100, price low), (charged +100, price high)}
+                        transition_model[s, a, s-2] = probability_matrix[s, s-2]
+                        transition_model[s, a, s-3] = probability_matrix[s, s-3]
+                #when idle
+                elif a == 2:
+                    #state -> state, state+1/state-1
+                    # (charged, price low) -> {(charged, price low), (charged, price high)}
+                    if (s % 2 == 0):
+                        transition_model[s, a, s] = probability_matrix[s, s]
+                        transition_model[s, a, s+1] = probability_matrix[s, s+1]
+                    else:
+                        # (charged, price high) -> {(charged +100, price low), (charged +100, price high)}
+                        transition_model[s, a, s] = probability_matrix[s, s]
+                        transition_model[s, a, s-1] = probability_matrix[s, s-1]
         return transition_model
 
     def get_state(self):

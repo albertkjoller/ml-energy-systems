@@ -11,6 +11,9 @@ class ValueIteration:
         self.gamma = gamma
         self.values = np.zeros(self.num_states)
         self.policy = None
+        self.states_dict =  {0: 'Charged 0, Price Low', 2: 'Charged 0, Price High',
+                             3: 'Charged 100, Price Low',  4: 'Charged 100, Price High',
+                             5: 'Charged 100, Price Low',  6: 'Charged 100, Price High'}
 
     def one_iteration(self):
         delta = 0
@@ -19,7 +22,7 @@ class ValueIteration:
             v_list = np.zeros(self.num_actions)
             for a in range(self.num_actions):
                 p = self.transition_model[s, a]
-                v_list[a] = self.reward_function[s] + self.gamma * np.sum(p * self.values)
+                v_list[a] = self.reward_function[a, s] + self.gamma * np.sum(p * self.values)
 
             self.values[s] = max(v_list)
             delta = max(delta, abs(temp - self.values[s]))
@@ -31,7 +34,7 @@ class ValueIteration:
             v_list = np.zeros(self.num_actions)
             for a in range(self.num_actions):
                 p = self.transition_model[s, a]
-                v_list[a] = self.reward_function[s] + self.gamma * np.sum(p * self.values)
+                v_list[a] = self.reward_function[a, s] + self.gamma * np.sum(p * self.values)
 
             max_index = []
             max_val = np.max(v_list)
@@ -39,6 +42,7 @@ class ValueIteration:
                 if v_list[a] == max_val:
                     max_index.append(a)
             pi[s] = np.random.choice(max_index)
+        print(pi)
         return pi.astype(int)
 
     def train(self, tol=1e-3, plot=True):
@@ -53,8 +57,8 @@ class ValueIteration:
                 break
         self.policy = self.get_policy()
 
-        # print(f'# iterations of policy improvement: {len(delta_history)}')
-        # print(f'delta = {delta_history}')
+        print(f'# iterations of policy improvement: {len(delta_history)}')
+        print(f'delta = {delta_history}')
 
         if plot is True:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2), dpi=200)
