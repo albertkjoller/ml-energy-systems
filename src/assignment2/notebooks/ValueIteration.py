@@ -11,9 +11,7 @@ class ValueIteration:
         self.gamma = gamma
         self.values = np.zeros(self.num_states)
         self.policy = None
-        self.states_dict =  {0: 'Charged 0, Price Low', 2: 'Charged 0, Price High',
-                             3: 'Charged 100, Price Low',  4: 'Charged 100, Price High',
-                             5: 'Charged 100, Price Low',  6: 'Charged 100, Price High'}
+        self.actions_dict =  {0: 'Charging', 1: 'Discharging', 2: 'Idle'}
 
     def one_iteration(self):
         delta = 0
@@ -36,13 +34,19 @@ class ValueIteration:
                 p = self.transition_model[s, a]
                 v_list[a] = self.reward_function[a, s] + self.gamma * np.sum(p * self.values)
 
+            print(v_list)
             max_index = []
             max_val = np.max(v_list)
             for a in range(self.num_actions):
                 if v_list[a] == max_val:
                     max_index.append(a)
             pi[s] = np.random.choice(max_index)
-        print(pi)
+        
+        print (self.values)
+        policies = []
+        for value in pi:
+            policies.append(self.actions_dict.get(value))
+        print(policies)
         return pi.astype(int)
 
     def train(self, tol=1e-3, plot=True):
