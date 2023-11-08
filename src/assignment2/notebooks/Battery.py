@@ -18,9 +18,9 @@ class Battery(object):
         self.action = [0]
         self.current = [0]
 
-        self.num_rows = 3 # charged 0, charged 100, charged 200
+        self.num_rows = 6 # charged 0, charged 100, charged 200, charged 300, charged 400, charged 500
         self.num_cols = 2 # price high, price low
-        self.num_states = self.num_rows * self.num_cols # 6 states {(Charged 0, Price high), (Charged 0, Price low), 
+        self.num_states = self.num_rows * self.num_cols # 12 states {(Charged 0, Price high), (Charged 0, Price low), 
                                             # (Charged 100, Price high), (Charged 100, Price low)}
                                              # (Charged 200, Price high), (Charged 200, Price low)}
         self.num_actions = 3 # charging, discharging, idle
@@ -40,11 +40,13 @@ class Battery(object):
 
     def get_reward_function(self):
         # reward of each state
-        high_price = 200
+        high_price = 500
         low_price = 20
-        self.reward = np.array([[-low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -low_price*100, -high_price * 100],
-                                [+low_price*100, +high_price * 100, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100],
-                               [0, 0, 0, 0, 0, 0]])
+        self.reward = np.array([[-low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -low_price*100, -high_price * 100,
+                                 -low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -low_price*100, -high_price * 100],
+                                [+low_price*100, +high_price * 100, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100,
+                                 +low_price*100, +high_price * 100, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100],
+                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
         return self.reward
 
     def get_transition_model(self):
@@ -52,12 +54,18 @@ class Battery(object):
         # action any value from 0 to 2
         transition_model = np.zeros((self.num_states,self.num_actions, self.num_states))
         # probability matrix 6 X 6
-        probability_matrix = np.array([[0.80, 0.20, 0.80, 0.20, 0.00, 0.00], # 0, low
-                                     [0.85, 0.15, 0.85, 0.15, 0.00, 0.00], # 0, high
-                                     [0.80, 0.20, 0.80, 0.20, 0.80, 0.20], #100, low
-                                     [0.85, 0.15, 0.85, 0.15, 0.85, 0.15], #100 high
-                                     [0.00, 0.00, 0.80, 0.20, 0.80, 0.20], #200 low
-                                     [0.00, 0.00, 0.85, 0.15, 0.85, 0.15]]) #200 high
+        probability_matrix = np.array([[0.80, 0.20, 0.80, 0.20, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00], # 0, low
+                                       [0.85, 0.15, 0.85, 0.15, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00], # 0, high
+                                       [0.80, 0.20, 0.80, 0.20, 0.80, 0.20, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00], #100, low
+                                       [0.85, 0.15, 0.85, 0.15, 0.85, 0.15, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00], #100 high
+                                       [0.00, 0.00, 0.80, 0.20, 0.80, 0.20, 0.80, 0.20, 0.00, 0.00, 0.00, 0.00], #200 low
+                                       [0.00, 0.00, 0.85, 0.15, 0.85, 0.15, 0.85, 0.15, 0.00, 0.00, 0.00, 0.00], #200 high
+                                       [0.00, 0.00, 0.00, 0.00, 0.80, 0.20, 0.80, 0.20, 0.80, 0.20, 0.00, 0.00], #300 low
+                                       [0.00, 0.00, 0.00, 0.00, 0.85, 0.15, 0.85, 0.15, 0.85, 0.15, 0.00, 0.00], #300 high
+                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.80, 0.20, 0.80, 0.20, 0.80, 0.20], #400 low
+                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.85, 0.15, 0.85, 0.15, 0.85, 0.15], #400 high
+                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.80, 0.20, 0.80, 0.20], #500 low
+                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.85, 0.15, 0.85, 0.15]]) #500 high
         for s in range(self.num_states):
             # {0 - (Charged 0, Price high), 1 - (Charged 0, Price low), 
             #  2 - (Charged 100, Price high), 3 - (Charged 100, Price low),
