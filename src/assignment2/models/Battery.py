@@ -1,53 +1,79 @@
 import numpy as np
+from collections import defaultdict
 
 class Battery(object):
     """
     class for simulating battery.
     """
 
-    def __init__(self, reward, id='battery', capacity=500,
-                 timeStep=6,
-                 minimum_charge=0):
-        # self.id = id + '_' + str(Battery.idCounter)
-        # Battery.idCounter += 1
-        self.capacity = capacity
-        self.state = [capacity]
-        self.timeStep = 24/timeStep
-        self.time = []
-        self.minimum_charge = minimum_charge
-        self.action = [0]
-        self.current = [0]
+    def __init__(self, prices, high_low_prices, id='battery'):
+        # Define state and action spaces
+        self.state_space        = [str(f"[{c*100}, {p}]") for c in range(6) for p in ['L', 'H']]
+        self.num_states         = len(self.state_space)
+        self.boundaries         = {'soc': {'min': 0, 'max': 500}, 'price': {'min': 'L', 'max': 'H'}}
 
-        self.num_rows = 6 # charged 0, charged 100, charged 200, charged 300, charged 400, charged 500
-        self.num_cols = 2 # price high, price low
-        self.num_states = self.num_rows * self.num_cols # 12 states {(Charged 0, Price high), (Charged 0, Price low), 
-                                            # (Charged 100, Price high), (Charged 100, Price low)}
-                                             # (Charged 200, Price high), (Charged 200, Price low)}
-        self.num_actions = 3 # charging, discharging, idle
-        self.reward = reward
-        self.transition_model = self.get_transition_model()
+        self.idx2action         = {0: 'Charge', 1: 'Discharge', 2: 'Idle'}
+        self.action_space       = {'Charge': 100, 'Discharge': -100, 'Idle': 0}
+        self.num_actions        = len(self.action_space) 
+        
+        # Define price signal
+        self.prices             = prices
+        self.high_price         = high_low_prices.loc['H']
+        self.low_price          = high_low_prices.loc['L']
+        
+        # Reset battery environment
+        self.state              = self.reset()
+        # Define transition probabilities
+        self.transition_model   = self.get_transition_model()
 
-    def charge(self, action):
-        self.state.append(self.state[-1] + action)
-        self.current.append(action)
-        self.action.append(action)
+    def reset(self, init_soc=500):
+        self.memory             = defaultdict(dict)
+        self.time               = 0
+        self.state              = [init_soc, self.prices['upcoming_price_level'][self.time + 1]]
 
-    def discharge(self, action):
-        self.state.append(self.state[-1] + action)
-        self.current.append(action )
-        self.action.append(action)
+        return self.state
+        
+    def charge(self):
+        self.state[0] = np.clip(self.state[0] + 100, self.boundaries['soc']['min'], self.boundaries['soc']['max'])
 
+    def discharge(self):
+        self.state[0] = np.clip(self.state[0] - 100, self.boundaries['soc']['min'], self.boundaries['soc']['max'])
+
+    def idle(self):
+        pass 
+    
+    def step(self, action):
+        # Get reward
+        soc_update  = np.clip(self.state[0] + self.action_space[action], self.boundaries['soc']['min'], self.boundaries['soc']['max'])
+        reward      = - self.action_space[action] * self.prices['SpotPriceDKK'][self.time] if soc_update != 0 else 0
+
+        # Update state
+        if action == 'Charge':
+            self.charge()
+        elif action == 'Discharge':
+            self.discharge()
+        else:
+            self.idle()
+
+        # Update time and
+        self.time += 1
+        # Update price level
+        self.state[1] = self.prices['upcoming_price_level'][self.time + 1]
+
+        # Return reward
+        return self.state, reward
 
     def get_reward_function(self):
-        # reward of each state
-        high_price = 1436
-        low_price = 887
-        # charging, discharing, waiting
-        self.reward = np.array([[-low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -low_price*100, -high_price * 100,
-                                 -low_price*100, -high_price * 100, -low_price*100, -high_price * 100, -np.inf, -np.inf],
-                                [-np.inf, -np.inf, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100,
-                                 +low_price*100, +high_price * 100, +low_price*100, +high_price * 100, +low_price*100, +high_price * 100],
-                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+        # charging, discharging, waiting
+        self.reward = np.array([[
+            -self.low_price*100, -self.high_price * 100, -self.low_price*100, -self.high_price * 100, -self.low_price*100, -self.high_price * 100, 
+            -self.low_price*100, -self.high_price * 100, -self.low_price*100, -self.high_price * 100, -np.inf, -np.inf
+        ], [
+            -np.inf, -np.inf, self.low_price*100, self.high_price * 100, self.low_price*100, self.high_price * 100,
+            self.low_price*100, self.high_price * 100, self.low_price*100, self.high_price * 100, self.low_price*100, self.high_price * 100
+        ], [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]])
         return self.reward
 
     def get_transition_model(self):
@@ -66,7 +92,9 @@ class Battery(object):
                                        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.87, 0.13, 0.87, 0.13, 0.87, 0.13], #400 low
                                        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.15, 0.85, 0.15, 0.85, 0.15, 0.85], #400 high
                                        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.87, 0.13, 0.87, 0.13], #500 low
-                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.15, 0.85, 0.15, 0.85]]) #500 high
+                                       [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.15, 0.85, 0.15, 0.85], #500 high
+                                       ])
+        
         for s in range(self.num_states):
             # {0 - (Charged 0, Price high), 1 - (Charged 0, Price low), 
             #  2 - (Charged 100, Price high), 3 - (Charged 100, Price low),
@@ -107,11 +135,3 @@ class Battery(object):
                         transition_model[s, a, s] = probability_matrix[s, s]
                         transition_model[s, a, s-1] = probability_matrix[s, s-1]
         return transition_model
-
-    def get_state(self):
-        return {'time': self.time[-1], 'state': self.state[-1]}
-
-    def get_history(self):
-        return {'time': np.array(self.time), 'state': np.array(self.state),
-                'action': np.array(self.action),
-                'current': np.array(self.current)}
