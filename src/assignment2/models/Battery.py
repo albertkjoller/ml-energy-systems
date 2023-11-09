@@ -45,7 +45,7 @@ class Battery(object):
     def step(self, action):
         # Get reward
         soc_update  = np.clip(self.state[0] + self.action_space[action], self.boundaries['soc']['min'], self.boundaries['soc']['max'])
-        reward      = - self.action_space[action] * self.prices['SpotPriceDKK'][self.time] if soc_update != 0 else 0
+        reward      = - self.action_space[action] * self.prices['SpotPriceDKK'][self.time] if (soc_update != 0 or self.state != 100) else 0
 
         # Update state
         if action == 'Charge':
