@@ -23,7 +23,7 @@ All the relevant code is contained in the `src.assignment1` folder while the res
 
 ### __Assignment 2:__ Real-time control of a battery
 
-This assignment deals with investigating the problem of controlling a battery by learning a policy based on day-ahead prices.
+This assignment deals with investigating the problem of controlling a battery by learning a policy based on day-ahead prices. Concretely, a Markov Decision Process is specified and solved using the Value Iteration algorithm. From this, the optimal policy is obtained and experiments on the discount factor, reward signal, etc. are conducted by applying the learned policy on a sequence of day-ahead prices.
 
 All the relevant code is contained in the `src.assignment2` folder while the results from the associated report can be obtained by running `src.assignment2.notebooks.explainer_notebook.ipynb`.
 
