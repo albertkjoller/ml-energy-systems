@@ -38,8 +38,8 @@ N_lines = PTDF.shape[0]     # the number of transmission lines
 if __name__ == '__main__':
 
     # SPECIFY THE SAMPLES TO RUN
-    start_sample_idx    = 10
-    end_sample_idx      = 12
+    start_sample_idx    = 2000
+    end_sample_idx      = 2500
 
     # Import the system class
     system = BUS118(
