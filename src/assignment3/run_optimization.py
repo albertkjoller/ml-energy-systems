@@ -16,7 +16,7 @@ pmin    = pd.read_csv(DATA_DIR / 'pgmin.csv')
 ru      = pd.read_csv(DATA_DIR / 'ramp.csv')
 UT      = pd.read_csv(DATA_DIR / 'lu.csv')
 DT      = pd.read_csv(DATA_DIR / 'ld.csv')    
-demand  = pd.read_csv(DATA_DIR / 'Demand.csv', sep=';')   
+demand  = pd.read_csv(DATA_DIR / 'demand.csv', sep=';')   
 c_op    = pd.read_csv(DATA_DIR / 'cost_op.csv') 
 c_st    = pd.read_csv(DATA_DIR / 'cost_st.csv') 
 PTDF    = pd.read_csv(DATA_DIR / 'PTDF.csv', sep=';') 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # SPECIFY THE SAMPLES TO RUN
     start_sample_idx    = 0
-    end_sample_idx      = 500
+    end_sample_idx      = 2000
 
     # Import the system class
     system = BUS118(
