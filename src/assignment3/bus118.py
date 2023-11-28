@@ -1,9 +1,8 @@
-
 import gurobipy as grb
 from tqdm import tqdm
+import numpy as np
 
 class BUS118:
-    
     def __init__(self, 
         N_g, N_t, N_load, N_lines, 
         demand,
@@ -50,7 +49,7 @@ class BUS118:
     def define_constraints(self, load_profile):
         
         self.demand_profile = (self.demand * load_profile)
-
+        
         for t in tqdm(range(self.N_t), desc='Adding constraints...'):
             ### POWER BALANCE EQUATION ###
             # Add power balance constraints for each time step
@@ -86,15 +85,16 @@ class BUS118:
                                 
             ### LINE FLOW LIMITS ###
             for l in range(self.N_lines):
-                line_expr1  = grb.quicksum(self.Hg.iloc[l, g_n] * self.p[g_n, t] for g_n in range(self.N_g)) 
-                line_expr2  = grb.quicksum(self.Hl.iloc[l, n] * self.demand_profile.iloc[t, n] for n in range(self.N_load))
+                line_expr1  = grb.quicksum(self.Hg.iloc[l, g_n] * self.p[g_n, t] for g_n in range(self.N_g))
+                line_expr2  = grb.LinExpr(np.dot(self.Hl.iloc[l, :], self.demand_profile.iloc[t, :]))
                 line_expr   = line_expr1 - line_expr2 - self.eps[t, 0] + self.delta[t, 0]
-                                
+
+                line_max = self.fmax.iloc[l].item()
                 # LHS
-                self.model.addConstr(line_expr <= self.fmax.iloc[l].item(), name=f'pos_line_flow_limit[{l},{t}]')
+                self.model.addLConstr(line_expr <= line_max, name=f'pos_line_flow_limit[{l},{t}]')
                 # RHS
-                self.model.addConstr(-self.fmax.iloc[l].item() <= line_expr, name=f'neg_line_flow_limit[{l},{t}]')
-                
+                self.model.addLConstr(-line_max <= line_expr, name=f'neg_line_flow_limit[{l},{t}]')
+  
         self.model.update()
     
     def define_objective(self, M: int = 1):

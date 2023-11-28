@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -6,6 +7,8 @@ from pathlib import Path
 from src.assignment3.bus118 import BUS118
 
 DATA_DIR = Path('data')
+SAVE_DIR = DATA_DIR / 'processed'
+os.makedirs(SAVE_DIR, exist_ok=True)
 
 # Load data files from csv-files
 pmax    = pd.read_csv(DATA_DIR / 'pgmax.csv')
@@ -38,8 +41,8 @@ N_lines = PTDF.shape[0]     # the number of transmission lines
 if __name__ == '__main__':
 
     # SPECIFY THE SAMPLES TO RUN
-    start_sample_idx    = 2000
-    end_sample_idx      = 2500
+    start_sample_idx    = 0
+    end_sample_idx      = 500
 
     # Import the system class
     system = BUS118(
@@ -53,6 +56,7 @@ if __name__ == '__main__':
 
     # Create an internal for loop to run and save the data
     for i in tqdm(range(start_sample_idx, end_sample_idx, 1)):
+
         # Select a load profile
         load_profile = samples.iloc[i, :].values[np.newaxis, :]
 
@@ -81,31 +85,32 @@ if __name__ == '__main__':
             'rhs': c.getAttr('rhs')
         } for c in system.model.getConstrs()])
 
-
         grouped_constraints = {}
         for name in tqdm(constraints['constr_type'].unique()):
             grouped_constraints[name] = constraints.query('constr_type == @name').reset_index(drop=True)
 
-        line_flow_limits = grouped_constraints['pos_line_flow_limit']
-        slack_line_vals_pos = line_flow_limits['constraint_slack'] - line_flow_limits['rhs']
+        pos_line_flow_limits            = grouped_constraints['pos_line_flow_limit']
+        pos_line_flow_limits['l']       = pos_line_flow_limits['constr_level'].apply(lambda x: int(x.strip('[').strip(']').split(',')[0]))
+        pos_line_flow_limits['t']       = pos_line_flow_limits['constr_level'].apply(lambda x: int(x.strip('[').strip(']').split(',')[1]))
+        pos_line_flow_limits['active']  = (abs(pos_line_flow_limits['constraint_slack']) < 1e-3).astype(int)
 
-        grouped_constraints = {}
-        for name in tqdm(constraints['constr_type'].unique()):
-            grouped_constraints[name] = constraints.query('constr_type == @name').reset_index(drop=True)
+        neg_line_flow_limits            = grouped_constraints['neg_line_flow_limit']
+        neg_line_flow_limits['l']       = neg_line_flow_limits['constr_level'].apply(lambda x: int(x.strip('[').strip(']').split(',')[0]))
+        neg_line_flow_limits['t']       = neg_line_flow_limits['constr_level'].apply(lambda x: int(x.strip('[').strip(']').split(',')[1]))
+        neg_line_flow_limits['active']  = (abs(neg_line_flow_limits['constraint_slack']) < 1e-3).astype(int)
 
-        line_flow_limits = grouped_constraints['neg_line_flow_limit']
-        slack_line_vals_neg = line_flow_limits['constraint_slack'] - line_flow_limits['rhs']
-
+        # Extract as dataframe
+        pos_active_lines                = pd.pivot_table(pos_line_flow_limits, index='t', columns='l', values='active', aggfunc='sum')
+        pos_active_lines.columns        = [f'Line {i+1}' for i in range(system.N_lines)]
+        pos_active_lines.index          = [f'Hour {i+1}' for i in range(system.N_t)]
+        # Extract as dataframe
+        neg_active_lines                = pd.pivot_table(neg_line_flow_limits, index='t', columns='l', values='active', aggfunc='sum')
+        neg_active_lines.columns        = [f'Line {i+1}' for i in range(system.N_lines)]
+        neg_active_lines.index          = [f'Hour {i+1}' for i in range(system.N_t)]
 
         # Save the results
         save_res = pd.concat([on_off.T, start_up.T], axis=1)
-        save_res.to_csv(DATA_DIR / f'Processed/saved_binary_var_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
-
-        pos_val = slack_line_vals_neg.values.reshape(24, 186)
-        neg_val = slack_line_vals_neg.values.reshape(24, 186)
-
-        res_aux = np.concatenate((pos_val, neg_val), axis=1)
-        df_test = pd.DataFrame(res_aux)
-
-        df_test.to_csv(DATA_DIR / f'Processed/saved_active_constraints_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
-        
+        on_off.to_csv(SAVE_DIR / f'on_off_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
+        start_up.to_csv(SAVE_DIR / f'start_up_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
+        pos_active_lines.to_csv(SAVE_DIR / f'active_pos_lineflow_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
+        neg_active_lines.to_csv(SAVE_DIR / f'active_neg_lineflow_{start_sample_idx}_{end_sample_idx}.csv', index=False, header=False, mode='a')
