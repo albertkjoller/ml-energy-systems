@@ -92,4 +92,4 @@ hpc_access_token.txt
 *_albert.ipynb
 *.pkl
 /Simple Models/*
-*.csv
+.csv
