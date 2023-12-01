@@ -27,6 +27,12 @@ This assignment deals with investigating the problem of controlling a battery by
 
 All the relevant code is contained in the `src.assignment2` folder while the results from the associated report can be obtained by running `src.assignment2.notebooks.explainer_notebook.ipynb`.
 
+### __Assignment 3:__ Day-ahead generation scheduling
+
+This assignment deals with examining the problem of setting the optimal power generation schedule in a day-ahead setting (TSO). The problem is formulated as a linear program and solved using Gurobi after which a data set is extracted from which a machine learning approach to solving the same task is solved.
+
+All the relevant code is contained in the `src.assignment3` folder while the results from the associated report can be obtained by running `src.assignment3.notebooks.explainer_notebook.ipynb`. The extracted data set is located in the `src.assignment3.data` folder. 
+
 --------
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
